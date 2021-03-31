@@ -216,23 +216,29 @@ fn initial_device_state(config: ConnectConfig) -> DeviceState {
 fn calc_logarithmic_volume(volume: u16) -> u16 {
     // Volume conversion taken from https://www.dr-lex.be/info-stuff/volumecontrols.html#ideal2
     // Convert the given volume [0..0xffff] to a dB gain
-    // We assume a dB range of 60dB.
+    // We assume a dB range of 60dB --> 10^(60/20) = 1000 * amplitude
     // Use the equation: a * exp(b * x)
-    // in which a = IDEAL_FACTOR, b = 1/1000
-    const IDEAL_FACTOR: f64 = 6.908;
+    // in which a = 1/1000, b = ln(1000)
+    const IDEAL_FACTOR: f64 = 6.907755279; // ln(1000)
     let normalized_volume = volume as f64 / std::u16::MAX as f64; // To get a value between 0 and 1
 
-    let mut val = std::u16::MAX;
-    // Prevent val > std::u16::MAX due to rounding errors
-    if normalized_volume < 0.999 {
-        let new_volume = (normalized_volume * IDEAL_FACTOR).exp() / 1000.0;
-        val = (new_volume * std::u16::MAX as f64) as u16;
+    let mut log_volume = std::u16::MAX;
+
+    // Prevent log_volume > std::u16::MAX due to IDEAL_FACTOR rounding errors
+    let normalized_log_volume = (normalized_volume * IDEAL_FACTOR).exp() / 1000.0;
+    if normalized_log_volume < 1.0 {
+        log_volume = (normalized_log_volume * std::u16::MAX as f64) as u16;
+
+        // smooth transtion to zero
+        if normalized_volume < 0.1 {
+            log_volume = (log_volume as f64 * (normalized_volume * 10.0)) as u16;
+        }
     }
 
-    debug!("input volume:{} to mixer: {}", volume, val);
+    debug!("input volume: {} to mixer: {}", volume, log_volume);
 
     // return the scale factor (0..0xffff) (equivalent to a voltage multiplier).
-    val
+    log_volume
 }
 
 fn volume_to_mixer(volume: u16, volume_ctrl: &VolumeCtrl) -> u16 {
