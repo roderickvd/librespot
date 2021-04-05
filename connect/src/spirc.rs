@@ -219,34 +219,35 @@ fn calc_logarithmic_volume(volume: u16) -> u16 {
     // We assume a dB range of 60dB --> 10^(60/20) = 1000 * amplitude
     // Use the equation: a * exp(b * x)
     // in which a = 1/1000, b = ln(1000)
-    const IDEAL_FACTOR: f64 = 6.907755279; // ln(1000)
+    const DB_RATIO: f64 = 1000.0;
+    let ideal_factor = f64::ln(DB_RATIO);
+
     let normalized_volume = volume as f64 / std::u16::MAX as f64; // To get a value between 0 and 1
+    let normalized_log_volume = (normalized_volume * ideal_factor).exp() / DB_RATIO;
 
+    // Prevent log_volume > std::u16::MAX due to ideal_factor rounding errors
     let mut log_volume = std::u16::MAX;
-
-    // Prevent log_volume > std::u16::MAX due to IDEAL_FACTOR rounding errors
-    let normalized_log_volume = (normalized_volume * IDEAL_FACTOR).exp() / 1000.0;
     if normalized_log_volume < 1.0 {
         log_volume = (normalized_log_volume * std::u16::MAX as f64) as u16;
 
-        // smooth transtion to zero
+        // exp(0) is not absolute silence; smooth transtion to zero
         if normalized_volume < 0.1 {
             log_volume = (log_volume as f64 * (normalized_volume * 10.0)) as u16;
         }
     }
-
-    debug!("input volume: {} to mixer: {}", volume, log_volume);
 
     // return the scale factor (0..0xffff) (equivalent to a voltage multiplier).
     log_volume
 }
 
 fn volume_to_mixer(volume: u16, volume_ctrl: &VolumeCtrl) -> u16 {
-    match volume_ctrl {
-        VolumeCtrl::Linear => volume,
+    let mixer_volume = match volume_ctrl {
         VolumeCtrl::Log => calc_logarithmic_volume(volume),
-        VolumeCtrl::Fixed => volume,
-    }
+        _ => volume,
+    };
+
+    debug!("input volume: {} to mixer: {}", volume, mixer_volume);
+    mixer_volume
 }
 
 fn url_encode(bytes: impl AsRef<[u8]>) -> String {
