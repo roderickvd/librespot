@@ -213,7 +213,11 @@ fn initial_device_state(config: ConnectConfig) -> DeviceState {
     }
 }
 
-fn calc_logarithmic_volume(volume: u16) -> u16 {
+fn calc_normalized_volume(volume: u16) -> f32 {
+    (volume as f64 / std::u16::MAX as f64) as f32
+}
+
+fn calc_normalized_log_volume(volume: u16) -> f32 {
     // Volume conversion taken from https://www.dr-lex.be/info-stuff/volumecontrols.html#ideal2
     // Convert the given volume [0..0xffff] to a dB gain
     // We assume a dB range of 60dB --> 10^(60/20) = 1000 * amplitude
@@ -222,31 +226,31 @@ fn calc_logarithmic_volume(volume: u16) -> u16 {
     const DB_RATIO: f64 = 1000.0;
     let ideal_factor = f64::ln(DB_RATIO);
 
-    let normalized_volume = volume as f64 / std::u16::MAX as f64; // To get a value between 0 and 1
-    let normalized_log_volume = (normalized_volume * ideal_factor).exp() / DB_RATIO;
+    let normalized_volume = calc_normalized_volume(volume) as f64;
+    let mut normalized_log_volume = (normalized_volume * ideal_factor).exp() / DB_RATIO;
 
-    // Prevent log_volume > std::u16::MAX due to ideal_factor rounding errors
-    let mut log_volume = std::u16::MAX;
-    if normalized_log_volume < 1.0 {
-        log_volume = (normalized_log_volume * std::u16::MAX as f64) as u16;
-
-        // exp(0) is not absolute silence; smooth transtion to zero
-        if normalized_volume < 0.1 {
-            log_volume = (log_volume as f64 * (normalized_volume * 10.0)) as u16;
-        }
+    if normalized_volume < 0.1 {
+        // exp(0) is not mute, but should be; smooth transtion to zero
+        normalized_log_volume = normalized_log_volume * (normalized_volume * 10.0);
     }
 
-    // return the scale factor (0..0xffff) (equivalent to a voltage multiplier).
-    log_volume
+    if normalized_log_volume < 1.0 {
+        normalized_log_volume as f32
+    } else {
+        1.0 // limit in case of rounding errors
+    }
 }
 
-fn volume_to_mixer(volume: u16, volume_ctrl: &VolumeCtrl) -> u16 {
+fn volume_to_mixer(volume: u16, volume_ctrl: &VolumeCtrl) -> f32 {
     let mixer_volume = match volume_ctrl {
-        VolumeCtrl::Log => calc_logarithmic_volume(volume),
-        _ => volume,
+        VolumeCtrl::Log => calc_normalized_log_volume(volume),
+        _ => calc_normalized_volume(volume),
     };
 
-    debug!("input volume: {} to mixer: {}", volume, mixer_volume);
+    debug!(
+        "input volume: {} normalized to mixer: {}",
+        volume, mixer_volume
+    );
     mixer_volume
 }
 

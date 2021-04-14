@@ -4,8 +4,8 @@ pub trait Mixer: Send {
         Self: Sized;
     fn start(&self);
     fn stop(&self);
-    fn set_volume(&self, volume: u16);
-    fn volume(&self) -> u16;
+    fn set_volume(&self, volume: f32);
+    fn volume(&self) -> f32;
     fn get_audio_filter(&self) -> Option<Box<dyn AudioFilter + Send>> {
         None
     }

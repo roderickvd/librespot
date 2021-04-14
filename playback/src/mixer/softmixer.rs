@@ -1,27 +1,27 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use super::AudioFilter;
 use super::{Mixer, MixerConfig};
 
 #[derive(Clone)]
 pub struct SoftMixer {
-    volume: Arc<AtomicUsize>,
+    volume: Arc<Mutex<f32>>,
 }
 
 impl Mixer for SoftMixer {
     fn open(_: Option<MixerConfig>) -> SoftMixer {
         SoftMixer {
-            volume: Arc::new(AtomicUsize::new(0xFFFF)),
+            volume: Arc::new(Mutex::new(1.0)),
         }
     }
     fn start(&self) {}
     fn stop(&self) {}
-    fn volume(&self) -> u16 {
-        self.volume.load(Ordering::Relaxed) as u16
+    fn volume(&self) -> f32 {
+        *self.volume.lock().unwrap()
     }
-    fn set_volume(&self, volume: u16) {
-        self.volume.store(volume as usize, Ordering::Relaxed);
+    fn set_volume(&self, volume: f32) {
+        let mut vol = self.volume.lock().unwrap();
+        *vol = volume;
     }
     fn get_audio_filter(&self) -> Option<Box<dyn AudioFilter + Send>> {
         Some(Box::new(SoftVolumeApplier {
@@ -31,16 +31,15 @@ impl Mixer for SoftMixer {
 }
 
 struct SoftVolumeApplier {
-    volume: Arc<AtomicUsize>,
+    volume: Arc<Mutex<f32>>,
 }
 
 impl AudioFilter for SoftVolumeApplier {
     fn modify_stream(&self, data: &mut [f32]) {
-        let volume = self.volume.load(Ordering::Relaxed) as u16;
-        if volume != 0xFFFF {
-            let volume_factor = volume as f64 / 0xFFFF as f64;
+        let volume = *self.volume.lock().unwrap();
+        if volume < 1.0 {
             for x in data.iter_mut() {
-                *x = (*x as f64 * volume_factor) as f32;
+                *x = (*x as f64 * volume as f64) as f32;
             }
         }
     }
