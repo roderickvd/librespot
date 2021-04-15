@@ -213,11 +213,11 @@ fn initial_device_state(config: ConnectConfig) -> DeviceState {
     }
 }
 
-fn calc_normalized_volume(volume: u16) -> f32 {
-    (volume as f64 / std::u16::MAX as f64) as f32
+fn calc_normalized_volume(volume: u16) -> f64 {
+    volume as f64 / std::u16::MAX as f64
 }
 
-fn calc_normalized_log_volume(volume: u16) -> f32 {
+fn calc_normalized_log_volume(volume: u16) -> f64 {
     // Volume conversion taken from https://www.dr-lex.be/info-stuff/volumecontrols.html#ideal2
     // Convert the given volume [0..0xffff] to a dB gain
     // We assume a dB range of 60dB --> 10^(60/20) = 1000 * amplitude
@@ -226,30 +226,30 @@ fn calc_normalized_log_volume(volume: u16) -> f32 {
     const DB_RATIO: f64 = 1000.0;
     let ideal_factor = f64::ln(DB_RATIO);
 
-    let normalized_volume = calc_normalized_volume(volume) as f64;
+    let normalized_volume = calc_normalized_volume(volume);
     let mut normalized_log_volume = (normalized_volume * ideal_factor).exp() / DB_RATIO;
 
     if normalized_volume < 0.1 {
         // exp(0) is not mute, but should be; smooth transtion to zero
-        normalized_log_volume = normalized_log_volume * (normalized_volume * 10.0);
+        normalized_log_volume *= normalized_volume * 10.0;
     }
 
     if normalized_log_volume < 1.0 {
-        normalized_log_volume as f32
+        normalized_log_volume
     } else {
         1.0 // limit in case of rounding errors
     }
 }
 
-fn volume_to_mixer(volume: u16, volume_ctrl: &VolumeCtrl) -> f32 {
+fn volume_to_mixer(volume: u16, volume_ctrl: &VolumeCtrl) -> f64 {
     let mixer_volume = match volume_ctrl {
         VolumeCtrl::Log => calc_normalized_log_volume(volume),
         _ => calc_normalized_volume(volume),
     };
 
     debug!(
-        "input volume: {} normalized to mixer: {}",
-        volume, mixer_volume
+        "input volume: {} normalized to mixer: {:.3}%",
+        volume, mixer_volume * 100.0
     );
     mixer_volume
 }

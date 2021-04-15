@@ -5,7 +5,7 @@ use super::{Mixer, MixerConfig};
 
 #[derive(Clone)]
 pub struct SoftMixer {
-    volume: Arc<Mutex<f32>>,
+    volume: Arc<Mutex<f64>>,
 }
 
 impl Mixer for SoftMixer {
@@ -16,10 +16,10 @@ impl Mixer for SoftMixer {
     }
     fn start(&self) {}
     fn stop(&self) {}
-    fn volume(&self) -> f32 {
+    fn volume(&self) -> f64 {
         *self.volume.lock().unwrap()
     }
-    fn set_volume(&self, volume: f32) {
+    fn set_volume(&self, volume: f64) {
         let mut vol = self.volume.lock().unwrap();
         *vol = volume;
     }
@@ -31,7 +31,7 @@ impl Mixer for SoftMixer {
 }
 
 struct SoftVolumeApplier {
-    volume: Arc<Mutex<f32>>,
+    volume: Arc<Mutex<f64>>,
 }
 
 impl AudioFilter for SoftVolumeApplier {
@@ -39,7 +39,7 @@ impl AudioFilter for SoftVolumeApplier {
         let volume = *self.volume.lock().unwrap();
         if volume < 1.0 {
             for x in data.iter_mut() {
-                *x = (*x as f64 * volume as f64) as f32;
+                *x = (*x as f64 * volume) as f32;
             }
         }
     }

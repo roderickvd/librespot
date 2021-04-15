@@ -29,7 +29,7 @@ impl AlsaMixer {
         f64::from(vol - min) / f64::from(max - min)
     }
 
-    fn init_mixer(mut config: MixerConfig) -> Result<AlsaMixer, Box<dyn Error>> {
+    fn init_mixer(mut config: MixerConfig) -> Result<Self, Box<dyn Error>> {
         let mixer = alsa::mixer::Mixer::new(&config.card, false)?;
         let sid = alsa::mixer::SelemId::new(&config.mixer, config.index);
 
@@ -67,7 +67,7 @@ impl AlsaMixer {
             debug!("Alsa min-db is not SND_CTL_TLV_DB_GAIN_MUTE!!");
         }
 
-        Ok(AlsaMixer {
+        Ok(Self {
             config,
             params: AlsaMixerVolumeParams {
                 min,
@@ -80,7 +80,7 @@ impl AlsaMixer {
         })
     }
 
-    fn map_volume(&self, set_volume: Option<u16>) -> Result<u16, Box<dyn Error>> {
+    fn map_volume(&self, set_volume: Option<f64>) -> Result<f64, Box<dyn Error>> {
         let mixer = alsa::mixer::Mixer::new(&self.config.card, false)?;
         let sid = alsa::mixer::SelemId::new(&*self.config.mixer, self.config.index);
 
@@ -92,7 +92,7 @@ impl AlsaMixer {
             .get_playback_vol_db(alsa::mixer::SelemChannelId::mono())
             .unwrap_or(alsa::mixer::MilliBel(-SND_CTL_TLV_DB_GAIN_MUTE));
 
-        let mut new_vol: u16 = 0;
+        let mut new_vol: f64 = 0.0;
         trace!("Current alsa volume: {}{:?}", cur_vol, cur_vol_db);
 
         match set_volume {
@@ -102,7 +102,7 @@ impl AlsaMixer {
                         .get_playback_switch(alsa::mixer::SelemChannelId::mono())
                         .map(|b| b == 0)
                         .unwrap_or(false);
-                    if vol == 0 {
+                    if f64::abs(vol - 0.0) <= f64::EPSILON {
                         debug!("Toggling mute::True");
                         selem.set_playback_switch_all(0).expect("Can't switch mute");
 
@@ -123,15 +123,14 @@ impl AlsaMixer {
                     // controls with a small range (24 dB or less), the mapping is linear in the dB
                     // values so that each step has the same size visually. TODO
                     // TODO: Check if min is not mute!
-                    let vol_db = (self.pvol(vol, 0x0000, 0xFFFF).log10() * 6000.0).floor() as i64
+                    let vol_db = (self.pvol(vol, 0.0, 1.0).log10() * 6000.0).floor() as i64
                         + self.params.max_db.0;
                     selem
                         .set_playback_db_all(alsa::mixer::MilliBel(vol_db), alsa::Round::Floor)
                         .expect("Couldn't set alsa dB volume");
                     debug!(
-                        "Mapping volume [{:.3}%] {:?} [u16] ->> Alsa [{:.3}%] {:?} [dB] - {} [i64]",
-                        self.pvol(vol, 0x0000, 0xFFFF) * 100.0,
-                        vol,
+                        "Mapping volume [{:.3}%] ->> Alsa [{:.3}%] {:?} [dB] - {} [i64]",
+                        vol * 100.0,
                         self.pvol(
                             vol_db as f64,
                             self.params.min as f64,
@@ -143,14 +142,13 @@ impl AlsaMixer {
                 } else {
                     // Linear mapping
                     let alsa_volume =
-                        ((vol as f64 / 0xFFFF as f64) * self.params.range) as i64 + self.params.min;
+                        (vol * self.params.range) as i64 + self.params.min;
                     selem
                         .set_playback_volume_all(alsa_volume)
                         .expect("Couldn't set alsa raw volume");
                     debug!(
-                        "Mapping volume [{:.3}%] {:?} [u16] ->> Alsa [{:.3}%] {:?} [i64]",
-                        self.pvol(vol, 0x0000, 0xFFFF) * 100.0,
-                        vol,
+                        "Mapping volume [{:.3}%] ->> Alsa [{:.3}%] {:?} [i64]",
+                        vol * 100.0,
                         self.pvol(
                             alsa_volume as f64,
                             self.params.min as f64,
@@ -159,13 +157,11 @@ impl AlsaMixer {
                         alsa_volume
                     );
                 };
-            }
+            },
             None => {
-                new_vol = (((cur_vol - self.params.min) as f64 / self.params.range) * 0xFFFF as f64)
-                    as u16;
+                new_vol = (cur_vol - self.params.min) as f64 / self.params.range;
                 debug!(
-                    "Mapping volume [{:.3}%] {:?} [u16] <<- Alsa [{:.3}%] {:?} [i64]",
-                    self.pvol(new_vol, 0x0000, 0xFFFF),
+                    "Mapping volume [{:.3}%] <<- Alsa [{:.3}%] {:?} [i64]",
                     new_vol,
                     self.pvol(
                         cur_vol as f64,
@@ -174,7 +170,7 @@ impl AlsaMixer {
                     ),
                     cur_vol
                 );
-            }
+            },
         }
 
         Ok(new_vol)
@@ -182,7 +178,7 @@ impl AlsaMixer {
 }
 
 impl Mixer for AlsaMixer {
-    fn open(config: Option<MixerConfig>) -> AlsaMixer {
+    fn open(config: Option<MixerConfig>) -> Self {
         let config = config.unwrap_or_default();
         info!(
             "Setting up new mixer: card:{} mixer:{} index:{}",
@@ -195,17 +191,17 @@ impl Mixer for AlsaMixer {
 
     fn stop(&self) {}
 
-    fn volume(&self) -> u16 {
+    fn volume(&self) -> f64 {
         match self.map_volume(None) {
             Ok(vol) => vol,
             Err(e) => {
                 error!("Error getting volume for <{}>, {:?}", self.config.card, e);
-                0
+                0.0
             }
         }
     }
 
-    fn set_volume(&self, volume: u16) {
+    fn set_volume(&self, volume: f64) {
         match self.map_volume(Some(volume)) {
             Ok(_) => (),
             Err(e) => error!("Error setting volume for <{}>, {:?}", self.config.card, e),
