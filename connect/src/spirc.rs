@@ -249,7 +249,8 @@ fn volume_to_mixer(volume: u16, volume_ctrl: &VolumeCtrl) -> f64 {
 
     debug!(
         "input volume: {} normalized to mixer: {:.3}%",
-        volume, mixer_volume * 100.0
+        volume,
+        mixer_volume * 100.0
     );
     mixer_volume
 }

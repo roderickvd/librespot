@@ -141,8 +141,7 @@ impl AlsaMixer {
                     );
                 } else {
                     // Linear mapping
-                    let alsa_volume =
-                        (vol * self.params.range) as i64 + self.params.min;
+                    let alsa_volume = (vol * self.params.range) as i64 + self.params.min;
                     selem
                         .set_playback_volume_all(alsa_volume)
                         .expect("Couldn't set alsa raw volume");
@@ -157,7 +156,7 @@ impl AlsaMixer {
                         alsa_volume
                     );
                 };
-            },
+            }
             None => {
                 new_vol = (cur_vol - self.params.min) as f64 / self.params.range;
                 debug!(
@@ -170,7 +169,7 @@ impl AlsaMixer {
                     ),
                     cur_vol
                 );
-            },
+            }
         }
 
         Ok(new_vol)
