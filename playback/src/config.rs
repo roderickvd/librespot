@@ -78,7 +78,7 @@ pub enum NormalisationType {
 impl FromStr for NormalisationType {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+        match s.to_lowercase().as_ref() {
             "album" => Ok(Self::Album),
             "track" => Ok(Self::Track),
             _ => Err(()),
@@ -101,7 +101,7 @@ pub enum NormalisationMethod {
 impl FromStr for NormalisationMethod {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+        match s.to_lowercase().as_ref() {
             "basic" => Ok(Self::Basic),
             "dynamic" => Ok(Self::Dynamic),
             _ => Err(()),
@@ -144,6 +144,44 @@ impl Default for PlayerConfig {
             normalisation_knee: 1.0,
             gapless: true,
             passthrough: false,
+        }
+    }
+}
+
+// fields are intended for volume control range in dB
+#[derive(Clone, Copy, Debug)]
+pub enum VolumeCtrl {
+    Cubic(u8),
+    Fixed,
+    Linear,
+    Log(u8),
+}
+
+impl FromStr for VolumeCtrl {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_str_with_range(s, Self::DEFAULT_DB_RANGE)
+    }
+}
+
+impl Default for VolumeCtrl {
+    fn default() -> VolumeCtrl {
+        VolumeCtrl::Log(Self::DEFAULT_DB_RANGE)
+    }
+}
+
+impl VolumeCtrl {
+    pub const MAX_VOLUME: u16 = std::u16::MAX;
+    pub const DEFAULT_DB_RANGE: u8 = 60;
+
+    pub fn from_str_with_range(s: &str, db_range: u8) -> Result<Self, <Self as FromStr>::Err> {
+        use self::VolumeCtrl::*;
+        match s.to_lowercase().as_ref() {
+            "cubic" => Ok(Cubic(db_range)),
+            "fixed" => Ok(Fixed),
+            "linear" => Ok(Linear),
+            "log" => Ok(Log(db_range)),
+            _ => Err(()),
         }
     }
 }

@@ -1,28 +1,42 @@
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 use super::AudioFilter;
+use super::{MappedCtrl, VolumeCtrl};
 use super::{Mixer, MixerConfig};
 
 #[derive(Clone)]
 pub struct SoftMixer {
-    volume: Arc<Mutex<f64>>,
+    // There is no AtomicF32, so we store the f32 as bits in a u32 field.
+    // It's much faster than a Mutex<f32>.
+    volume: Arc<AtomicU32>,
+    volume_ctrl: VolumeCtrl,
 }
 
 impl Mixer for SoftMixer {
-    fn open(_: Option<MixerConfig>) -> SoftMixer {
-        SoftMixer {
-            volume: Arc::new(Mutex::new(1.0)),
+    fn open(config: &mut MixerConfig) -> Self {
+        info!(
+            "Mixing with softvol and volume control: {:?}",
+            config.volume_ctrl
+        );
+
+        Self {
+            volume: Arc::new(AtomicU32::new(f32::to_bits(0.0))),
+            volume_ctrl: config.volume_ctrl,
         }
     }
-    fn start(&self) {}
-    fn stop(&self) {}
-    fn volume(&self) -> f64 {
-        *self.volume.lock().unwrap()
+
+    fn volume(&self) -> u16 {
+        let mapped_volume = f32::from_bits(self.volume.load(Ordering::Relaxed));
+        self.volume_ctrl.unmap(mapped_volume)
     }
-    fn set_volume(&self, volume: f64) {
-        let mut vol = self.volume.lock().unwrap();
-        *vol = volume;
+
+    fn set_volume(&self, volume: u16) {
+        let mapped_volume = self.volume_ctrl.map(volume);
+        self.volume
+            .store(mapped_volume.to_bits(), Ordering::Relaxed)
     }
+
     fn get_audio_filter(&self) -> Option<Box<dyn AudioFilter + Send>> {
         Some(Box::new(SoftVolumeApplier {
             volume: self.volume.clone(),
@@ -31,15 +45,15 @@ impl Mixer for SoftMixer {
 }
 
 struct SoftVolumeApplier {
-    volume: Arc<Mutex<f64>>,
+    volume: Arc<AtomicU32>,
 }
 
 impl AudioFilter for SoftVolumeApplier {
     fn modify_stream(&self, data: &mut [f32]) {
-        let volume = *self.volume.lock().unwrap();
-        if volume < 1.0 {
+        let volume = f32::from_bits(self.volume.load(Ordering::Relaxed));
+        if f32::abs(volume - 1.0) > f32::EPSILON {
             for x in data.iter_mut() {
-                *x = (*x as f64 * volume) as f32;
+                *x = (*x as f64 * volume as f64) as f32;
             }
         }
     }

@@ -1,213 +1,148 @@
-use super::AudioFilter;
+use super::{MappedCtrl, VolumeCtrl};
 use super::{Mixer, MixerConfig};
-use std::error::Error;
 
-const SND_CTL_TLV_DB_GAIN_MUTE: i64 = -9999999;
+use alsa::ctl::{ElemId, ElemIface};
+use alsa::mixer::{MilliBel, SelemChannelId, SelemId};
+use alsa::Ctl;
 
-#[derive(Clone)]
-struct AlsaMixerVolumeParams {
-    min: i64,
-    max: i64,
-    range: f64,
-    min_db: alsa::mixer::MilliBel,
-    max_db: alsa::mixer::MilliBel,
-    has_switch: bool,
-}
+use std::ffi::CString;
 
 #[derive(Clone)]
 pub struct AlsaMixer {
     config: MixerConfig,
-    params: AlsaMixerVolumeParams,
+    min: i64,
+    max: i64,
+    has_switch: bool,
 }
 
-impl AlsaMixer {
-    fn pvol<T>(&self, vol: T, min: T, max: T) -> f64
-    where
-        T: std::ops::Sub + Copy,
-        f64: std::convert::From<<T as std::ops::Sub>::Output>,
-    {
-        f64::from(vol - min) / f64::from(max - min)
-    }
-
-    fn init_mixer(mut config: MixerConfig) -> Result<Self, Box<dyn Error>> {
-        let mixer = alsa::mixer::Mixer::new(&config.card, false)?;
-        let sid = alsa::mixer::SelemId::new(&config.mixer, config.index);
-
-        let selem = mixer.find_selem(&sid).unwrap_or_else(|| {
-            panic!(
-                "Couldn't find simple mixer control for {},{}",
-                &config.mixer, &config.index,
-            )
-        });
-        let (min, max) = selem.get_playback_volume_range();
-        let (min_db, max_db) = selem.get_playback_db_range();
-        let hw_mix = selem
-            .get_playback_vol_db(alsa::mixer::SelemChannelId::mono())
-            .is_ok();
-        let has_switch = selem.has_playback_switch();
-        if min_db != alsa::mixer::MilliBel(SND_CTL_TLV_DB_GAIN_MUTE) {
-            warn!("Alsa min-db is not SND_CTL_TLV_DB_GAIN_MUTE!!");
-        }
-        info!(
-            "Alsa Mixer info min: {} ({:?}[dB]) -- max: {} ({:?}[dB]) HW: {:?}",
-            min, min_db, max, max_db, hw_mix
-        );
-
-        if config.mapped_volume && (max_db - min_db <= alsa::mixer::MilliBel(24)) {
-            warn!(
-                "Switching to linear volume mapping, control range: {:?}",
-                max_db - min_db
-            );
-            config.mapped_volume = false;
-        } else if !config.mapped_volume {
-            info!("Using Alsa linear volume");
-        }
-
-        if min_db != alsa::mixer::MilliBel(SND_CTL_TLV_DB_GAIN_MUTE) {
-            debug!("Alsa min-db is not SND_CTL_TLV_DB_GAIN_MUTE!!");
-        }
-
-        Ok(Self {
-            config,
-            params: AlsaMixerVolumeParams {
-                min,
-                max,
-                range: (max - min) as f64,
-                min_db,
-                max_db,
-                has_switch,
-            },
-        })
-    }
-
-    fn map_volume(&self, set_volume: Option<f64>) -> Result<f64, Box<dyn Error>> {
-        let mixer = alsa::mixer::Mixer::new(&self.config.card, false)?;
-        let sid = alsa::mixer::SelemId::new(&*self.config.mixer, self.config.index);
-
-        let selem = mixer.find_selem(&sid).unwrap();
-        let cur_vol = selem
-            .get_playback_volume(alsa::mixer::SelemChannelId::mono())
-            .expect("Couldn't get current volume");
-        let cur_vol_db = selem
-            .get_playback_vol_db(alsa::mixer::SelemChannelId::mono())
-            .unwrap_or(alsa::mixer::MilliBel(-SND_CTL_TLV_DB_GAIN_MUTE));
-
-        let mut new_vol: f64 = 0.0;
-        trace!("Current alsa volume: {}{:?}", cur_vol, cur_vol_db);
-
-        match set_volume {
-            Some(vol) => {
-                if self.params.has_switch {
-                    let is_muted = selem
-                        .get_playback_switch(alsa::mixer::SelemChannelId::mono())
-                        .map(|b| b == 0)
-                        .unwrap_or(false);
-                    if f64::abs(vol - 0.0) <= f64::EPSILON {
-                        debug!("Toggling mute::True");
-                        selem.set_playback_switch_all(0).expect("Can't switch mute");
-
-                        return Ok(vol);
-                    } else if is_muted {
-                        debug!("Toggling mute::False");
-                        selem.set_playback_switch_all(1).expect("Can't reset mute");
-                    }
-                }
-
-                if self.config.mapped_volume {
-                    // Cubic mapping ala alsamixer
-                    // https://linux.die.net/man/1/alsamixer
-                    // In alsamixer, the volume is mapped to a value that is more natural for a
-                    // human ear. The mapping is designed so that the position in the interval is
-                    // proportional to the volume as a human ear would perceive it, i.e. the
-                    // position is the cubic root of the linear sample multiplication factor. For
-                    // controls with a small range (24 dB or less), the mapping is linear in the dB
-                    // values so that each step has the same size visually. TODO
-                    // TODO: Check if min is not mute!
-                    let vol_db = (self.pvol(vol, 0.0, 1.0).log10() * 6000.0).floor() as i64
-                        + self.params.max_db.0;
-                    selem
-                        .set_playback_db_all(alsa::mixer::MilliBel(vol_db), alsa::Round::Floor)
-                        .expect("Couldn't set alsa dB volume");
-                    debug!(
-                        "Mapping volume [{:.3}%] ->> Alsa [{:.3}%] {:?} [dB] - {} [i64]",
-                        vol * 100.0,
-                        self.pvol(
-                            vol_db as f64,
-                            self.params.min as f64,
-                            self.params.max as f64
-                        ) * 100.0,
-                        vol_db as f64 / 100.0,
-                        vol_db
-                    );
-                } else {
-                    // Linear mapping
-                    let alsa_volume = (vol * self.params.range) as i64 + self.params.min;
-                    selem
-                        .set_playback_volume_all(alsa_volume)
-                        .expect("Couldn't set alsa raw volume");
-                    debug!(
-                        "Mapping volume [{:.3}%] ->> Alsa [{:.3}%] {:?} [i64]",
-                        vol * 100.0,
-                        self.pvol(
-                            alsa_volume as f64,
-                            self.params.min as f64,
-                            self.params.max as f64
-                        ) * 100.0,
-                        alsa_volume
-                    );
-                };
-            }
-            None => {
-                new_vol = (cur_vol - self.params.min) as f64 / self.params.range;
-                debug!(
-                    "Mapping volume [{:.3}%] <<- Alsa [{:.3}%] {:?} [i64]",
-                    new_vol,
-                    self.pvol(
-                        cur_vol as f64,
-                        self.params.min as f64,
-                        self.params.max as f64
-                    ),
-                    cur_vol
-                );
-            }
-        }
-
-        Ok(new_vol)
-    }
+// None of these are Send and cannot be stored in a Mixer struct,
+// so resort to using a macro for DRYness.
+macro_rules! get_simple_element {
+    ($name: ident, $config: expr) => {
+        let mixer = alsa::mixer::Mixer::new(&$config.card, false).expect("Unable to open mixer");
+        let simple_element_id = SelemId::new(&$config.control, $config.index);
+        let $name = mixer
+            .find_selem(&simple_element_id)
+            .expect("Unable to find mixer control");
+    };
 }
 
 impl Mixer for AlsaMixer {
-    fn open(config: Option<MixerConfig>) -> Self {
-        let config = config.unwrap_or_default();
+    fn open(config: &mut MixerConfig) -> Self {
         info!(
-            "Setting up new mixer: card:{} mixer:{} index:{}",
-            config.card, config.mixer, config.index
+            "Mixing with alsa and volume control: {:?} for card: {} with mixer control: {},{}",
+            config.volume_ctrl, config.card, config.control, config.index,
         );
-        AlsaMixer::init_mixer(config).expect("Error setting up mixer!")
+
+        get_simple_element!(simple_element, config);
+
+        let (min, max) = simple_element.get_playback_volume_range();
+        let has_switch = simple_element.has_playback_switch();
+
+        // query the dB range if not overriden with a command line option
+        if !config.volume_ctrl.range_ok() {
+            // Alsa exposes different APIs for hardware and software mixers
+            let is_softvol = simple_element
+                .get_playback_vol_db(SelemChannelId::mono())
+                .is_err();
+
+            debug!("Alsa mixer control is softvol: {}", is_softvol);
+
+            let (min_millibel, max_millibel) = match is_softvol {
+                false => simple_element.get_playback_db_range(),
+                true => {
+                    let control = Ctl::new(&config.card, false)
+                        .expect("Unable to open Alsa software volume control");
+                    let mut element_id = ElemId::new(ElemIface::Mixer);
+                    element_id.set_name(&CString::new(config.control.as_str()).unwrap());
+                    element_id.set_index(config.index);
+                    control.get_db_range(&element_id).unwrap_or((
+                        MilliBel(0),
+                        MilliBel::from_db(VolumeCtrl::DEFAULT_DB_RANGE.into()),
+                    ))
+                }
+            };
+
+            // these parameters might be configured as negative...
+            let min_db = min_millibel.to_db() as i8;
+            let max_db = max_millibel.to_db() as i8;
+            // ...but we only care about the absolute range
+            let db_range = i8::abs(max_db - min_db) as u8;
+
+            debug!("dB volume range: [{}..{}]", min_db, max_db);
+            config.volume_ctrl.set_db_range(db_range);
+        }
+
+        // Many implementations continue to work with the dB API and set up a
+        // linear mapping for mixers with ranges <= 24 dB as well. The first is
+        // not necessary because we map dB logarithmic and cubic curves to raw
+        // values. The second is an unncessary optimization also, because our
+        // mappings already provide a linear experience for such low ranges.
+
+        debug!("Raw volume range: [{}..{}]", min, max);
+        debug!("Support for playback (mute) switch: {}", has_switch);
+
+        Self {
+            config: config.clone(),
+            min,
+            max,
+            has_switch,
+        }
     }
 
-    fn start(&self) {}
+    fn volume(&self) -> u16 {
+        get_simple_element!(simple_element, self.config);
 
-    fn stop(&self) {}
+        if self.switched_off() {
+            return 0;
+        }
 
-    fn volume(&self) -> f64 {
-        match self.map_volume(None) {
-            Ok(vol) => vol,
-            Err(e) => {
-                error!("Error getting volume for <{}>, {:?}", self.config.card, e);
-                0.0
+        let alsa_volume = simple_element
+            .get_playback_volume(SelemChannelId::mono())
+            .expect("Couldn't get current volume");
+
+        let mapped_volume = alsa_volume / i64::abs(self.max - self.min) - self.min;
+        self.config.volume_ctrl.unmap(mapped_volume as f32)
+    }
+
+    fn set_volume(&self, volume: u16) {
+        get_simple_element!(simple_element, self.config);
+
+        let mapped_volume = self.config.volume_ctrl.map(volume);
+
+        if self.has_switch {
+            if f32::abs(mapped_volume - 0.0) <= f32::EPSILON {
+                simple_element
+                    .set_playback_switch_all(0)
+                    .expect("Could not disable playback (set mute)");
+            } else if self.switched_off() {
+                simple_element
+                    .set_playback_switch_all(1)
+                    .expect("Could not enable playback (unset mute)");
             }
         }
-    }
 
-    fn set_volume(&self, volume: f64) {
-        match self.map_volume(Some(volume)) {
-            Ok(_) => (),
-            Err(e) => error!("Error setting volume for <{}>, {:?}", self.config.card, e),
+        let alsa_volume =
+            (self.min as f32 + mapped_volume * i64::abs(self.max - self.min) as f32) as i64;
+        debug!("Setting Alsa raw volume to {}", alsa_volume);
+
+        simple_element
+            .set_playback_volume_all(alsa_volume as i64)
+            .expect("Could not set volume");
+    }
+}
+
+impl AlsaMixer {
+    fn switched_off(&self) -> bool {
+        if !self.has_switch {
+            return false;
         }
-    }
 
-    fn get_audio_filter(&self) -> Option<Box<dyn AudioFilter + Send>> {
-        None
+        get_simple_element!(simple_element, self.config);
+
+        simple_element
+            .get_playback_switch(SelemChannelId::mono())
+            .map(|b| b == 0)
+            .unwrap_or(false)
     }
 }
