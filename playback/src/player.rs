@@ -246,7 +246,7 @@ impl NormalisationData {
             let limited_normalisation_power = ratio_to_db(limited_normalisation_factor);
 
             if config.normalisation_method == NormalisationMethod::Basic {
-                warn!("Limiting gain to {:.2} for the duration of this track to stay under normalisation threshold.", limited_normalisation_power);
+                warn!("Limiting gain to {:.2} dB for the duration of this track to stay under normalisation threshold.", limited_normalisation_power);
                 normalisation_factor = limited_normalisation_factor;
             } else {
                 warn!(
@@ -793,8 +793,13 @@ impl PlayerTrackLoader {
                         e
                     );
 
-                    // unwrap safety: The file is cached, so session must have a cache
-                    if !self.session.cache().unwrap().remove_file(file_id) {
+                    if self
+                        .session
+                        .cache()
+                        .expect("If the audio file is cached, a cache should exist")
+                        .remove_file(file_id)
+                        .is_err()
+                    {
                         return None;
                     }
 
@@ -1161,8 +1166,8 @@ impl PlayerInternal {
                         }
 
                         if self.config.normalisation
-                            && (f32::abs(normalisation_factor - 1.0) < f32::EPSILON
-                                || self.config.normalisation_method != NormalisationMethod::Basic)
+                            && !(f32::abs(normalisation_factor - 1.0) <= f32::EPSILON
+                                && self.config.normalisation_method == NormalisationMethod::Basic)
                         {
                             for sample in data.iter_mut() {
                                 let mut actual_normalisation_factor = normalisation_factor;

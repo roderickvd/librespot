@@ -77,6 +77,7 @@ pub enum SpircCommand {
     VolumeUp,
     VolumeDown,
     Shutdown,
+    Shuffle,
 }
 
 struct SpircTaskConfig {
@@ -319,6 +320,9 @@ impl Spirc {
     pub fn shutdown(&self) {
         let _ = self.commands.send(SpircCommand::Shutdown);
     }
+    pub fn shuffle(&self) {
+        let _ = self.commands.send(SpircCommand::Shuffle);
+    }
 }
 
 impl SpircTask {
@@ -473,6 +477,9 @@ impl SpircTask {
                 if let Some(rx) = self.commands.as_mut() {
                     rx.close()
                 }
+            }
+            SpircCommand::Shuffle => {
+                CommandSender::new(self, MessageType::kMessageTypeShuffle).send();
             }
         }
     }

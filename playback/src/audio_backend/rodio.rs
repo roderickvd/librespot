@@ -152,8 +152,8 @@ fn create_sink(
 }
 
 pub fn open(host: cpal::Host, device: Option<String>, format: AudioFormat) -> RodioSink {
-    debug!(
-        "Using rodio sink with format {:?} and cpal host: {}",
+    info!(
+        "Using Rodio sink with format {:?} and cpal host: {}",
         format,
         host.id().name()
     );
