@@ -4,7 +4,7 @@ mod mappings;
 use self::mappings::MappedCtrl;
 
 pub trait Mixer: Send {
-    fn open(config: &mut MixerConfig) -> Self
+    fn open(config: MixerConfig) -> Self
     where
         Self: Sized;
 
@@ -49,9 +49,9 @@ impl Default for MixerConfig {
     }
 }
 
-pub type MixerFn = fn(&mut MixerConfig) -> Box<dyn Mixer>;
+pub type MixerFn = fn(MixerConfig) -> Box<dyn Mixer>;
 
-fn mk_sink<M: Mixer + 'static>(config: &mut MixerConfig) -> Box<dyn Mixer> {
+fn mk_sink<M: Mixer + 'static>(config: MixerConfig) -> Box<dyn Mixer> {
     Box::new(M::open(config))
 }
 

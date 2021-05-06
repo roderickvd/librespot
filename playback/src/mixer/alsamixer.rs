@@ -22,11 +22,13 @@ pub struct AlsaMixer {
 }
 
 impl Mixer for AlsaMixer {
-    fn open(config: &mut MixerConfig) -> Self {
+    fn open(config: MixerConfig) -> Self {
         info!(
             "Mixing with alsa and volume control: {:?} for card: {} with mixer control: {},{}",
             config.volume_ctrl, config.card, config.control, config.index,
         );
+
+        let mut config = config; // clone
 
         let mixer =
             alsa::mixer::Mixer::new(&config.card, false).expect("Could not open Alsa mixer");
@@ -82,7 +84,7 @@ impl Mixer for AlsaMixer {
         );
 
         Self {
-            config: config.clone(),
+            config,
             min,
             max,
             min_db,

@@ -725,8 +725,8 @@ async fn main() {
             },
             session = &mut connecting, if !connecting.is_terminated() => match session {
                 Ok(session) => {
-                    let mut mixer_config = setup.mixer_config.clone();
-                    let mixer = (setup.mixer)(&mut mixer_config);
+                    let mixer_config = setup.mixer_config.clone();
+                    let mixer = (setup.mixer)(mixer_config);
                     let player_config = setup.player_config.clone();
                     let connect_config = setup.connect_config.clone();
 

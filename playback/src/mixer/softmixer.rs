@@ -14,7 +14,7 @@ pub struct SoftMixer {
 }
 
 impl Mixer for SoftMixer {
-    fn open(config: &mut MixerConfig) -> Self {
+    fn open(config: MixerConfig) -> Self {
         info!(
             "Mixing with softvol and volume control: {:?}",
             config.volume_ctrl
