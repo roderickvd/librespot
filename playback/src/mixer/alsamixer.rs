@@ -21,19 +21,6 @@ pub struct AlsaMixer {
     use_linear: bool,
 }
 
-// None of these are Send and cannot be stored in a Mixer struct,
-// so resort to using a macro for DRYness.
-macro_rules! get_simple_element {
-    ($name: ident, $config: expr) => {
-        let mixer =
-            alsa::mixer::Mixer::new(&$config.card, false).expect("Could not open Alsa mixer");
-        let simple_element_id = SelemId::new(&$config.control, $config.index);
-        let $name = mixer
-            .find_selem(&simple_element_id)
-            .expect("Could not find Alsa mixer control");
-    };
-}
-
 impl Mixer for AlsaMixer {
     fn open(config: &mut MixerConfig) -> Self {
         info!(
@@ -41,7 +28,11 @@ impl Mixer for AlsaMixer {
             config.volume_ctrl, config.card, config.control, config.index,
         );
 
-        get_simple_element!(simple_element, config);
+        let mixer =
+            alsa::mixer::Mixer::new(&config.card, false).expect("Could not open Alsa mixer");
+        let simple_element = mixer
+            .find_selem(&SelemId::new(&config.control, config.index))
+            .expect("Could not find Alsa mixer control");
 
         let has_switch = simple_element.has_playback_switch();
         let is_softvol = simple_element
@@ -103,7 +94,11 @@ impl Mixer for AlsaMixer {
     }
 
     fn volume(&self) -> u16 {
-        get_simple_element!(simple_element, self.config);
+        let mixer =
+            alsa::mixer::Mixer::new(&self.config.card, false).expect("Could not open Alsa mixer");
+        let simple_element = mixer
+            .find_selem(&SelemId::new(&self.config.control, self.config.index))
+            .expect("Could not find Alsa mixer control");
 
         if self.switched_off() {
             return 0;
@@ -142,7 +137,11 @@ impl Mixer for AlsaMixer {
     }
 
     fn set_volume(&self, volume: u16) {
-        get_simple_element!(simple_element, self.config);
+        let mixer =
+            alsa::mixer::Mixer::new(&self.config.card, false).expect("Could not open Alsa mixer");
+        let simple_element = mixer
+            .find_selem(&SelemId::new(&self.config.control, self.config.index))
+            .expect("Could not find Alsa mixer control");
 
         let mapped_volume = self.config.volume_ctrl.map(volume);
 
@@ -191,7 +190,11 @@ impl AlsaMixer {
             return false;
         }
 
-        get_simple_element!(simple_element, self.config);
+        let mixer =
+            alsa::mixer::Mixer::new(&self.config.card, false).expect("Could not open Alsa mixer");
+        let simple_element = mixer
+            .find_selem(&SelemId::new(&self.config.control, self.config.index))
+            .expect("Could not find Alsa mixer control");
 
         simple_element
             .get_playback_switch(SelemChannelId::mono())
