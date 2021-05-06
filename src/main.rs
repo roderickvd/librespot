@@ -326,7 +326,7 @@ fn get_setup(args: &[String]) -> Setup {
         .optopt(
             "",
             "volume-ctrl",
-            "Volume control type {cubic|fixed|linear|log|none}. Defaults to log.",
+            "Volume control type {cubic|fixed|linear|log}. Defaults to log.",
             "CTRL",
         )
 		.optopt(
