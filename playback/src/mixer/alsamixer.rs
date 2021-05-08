@@ -71,11 +71,11 @@ impl Mixer for AlsaMixer {
 
             // Some controls report that their minimum volume is mute, instead
             // of their actual lowest dB setting before that.
-            if min_millibel == MilliBel(SND_CTL_TLV_DB_GAIN_MUTE) {
+            if min_millibel == MilliBel(SND_CTL_TLV_DB_GAIN_MUTE) && min < max {
+                debug!("Alsa mixer reported minimum dB as mute, trying workaround");
                 min_millibel = simple_element
-                    .ask_playback_vol_db(min)
+                    .ask_playback_vol_db(min + 1)
                     .expect("Could not convert Alsa raw volume to dB volume");
-                //                min_millibel = MilliBel((single_highest - max_millibel).0 * range);
             }
             (min_millibel, max_millibel)
         };
@@ -132,7 +132,7 @@ impl Mixer for AlsaMixer {
             return 0;
         }
 
-        if self.is_softvol {
+        if self.use_raw_linear() {
             let alsa_volume = simple_element
                 .get_playback_volume(SelemChannelId::mono())
                 .expect("Could not get current Alsa volume");
@@ -180,7 +180,7 @@ impl Mixer for AlsaMixer {
 
         let mapped_volume = self.config.volume_ctrl.map(volume);
 
-        if self.is_softvol {
+        if self.use_raw_linear() {
             let scaled_volume = (self.min as f32 + mapped_volume * self.range as f32) as i64;
             debug!("Setting Alsa raw volume to {}", scaled_volume);
             simple_element
@@ -221,5 +221,10 @@ impl AlsaMixer {
             .get_playback_switch(SelemChannelId::mono())
             .map(|b| b == 0)
             .unwrap_or(false)
+    }
+
+    fn use_raw_linear(&self) -> bool {
+        self.is_softvol
+            || (!self.use_linear_in_db && matches!(self.config.volume_ctrl, VolumeCtrl::Linear))
     }
 }
