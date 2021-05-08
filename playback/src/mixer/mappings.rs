@@ -156,9 +156,6 @@ impl CubicMapping {
     fn min_norm(db_range: u8) -> f32 {
         // Note that this 60.0 is unrelated to DEFAULT_DB_RANGE.
         // Instead, it's the cubic voltage to dB ratio.
-        f32::powf(
-            10.0,
-            -1.0 * db_range as f32 / 60.0 as f32,
-        )
+        f32::powf(10.0, -1.0 * db_range as f32 / 60.0 as f32)
     }
 }

@@ -55,9 +55,13 @@ impl Mixer for AlsaMixer {
         // Query dB volume range -- note that Alsa exposes a different
         // API for hardware and software mixers
         let (min_millibel, max_millibel) = if is_softvol {
-            let control = Ctl::new(&config.card, false).expect("Could not open Alsa softvol with that card");
+            let control =
+                Ctl::new(&config.card, false).expect("Could not open Alsa softvol with that card");
             let mut element_id = ElemId::new(ElemIface::Mixer);
-            element_id.set_name(&CString::new(config.control.as_str()).expect("Could not open Alsa softvol with that name"));
+            element_id.set_name(
+                &CString::new(config.control.as_str())
+                    .expect("Could not open Alsa softvol with that name"),
+            );
             element_id.set_index(config.index);
             control
                 .get_db_range(&element_id)
@@ -71,7 +75,7 @@ impl Mixer for AlsaMixer {
                 min_millibel = simple_element
                     .ask_playback_vol_db(min)
                     .expect("Could not convert Alsa raw volume to dB volume");
-//                min_millibel = MilliBel((single_highest - max_millibel).0 * range);
+                //                min_millibel = MilliBel((single_highest - max_millibel).0 * range);
             }
             (min_millibel, max_millibel)
         };
