@@ -15,9 +15,9 @@ pub struct AlsaMixer {
     min: i64,
     max: i64,
     range: i64,
-    min_db: i16,
-    max_db: i16,
-    db_range: u8,
+    min_db: f32,
+    max_db: f32,
+    db_range: f32,
     has_switch: bool,
     is_softvol: bool,
     use_linear_in_db: bool,
@@ -55,30 +55,41 @@ impl Mixer for AlsaMixer {
         // Query dB volume range -- note that Alsa exposes a different
         // API for hardware and software mixers
         let (min_millibel, max_millibel) = if is_softvol {
-            let control = Ctl::new(&config.card, false).expect("Could not open Alsa softvol");
+            let control = Ctl::new(&config.card, false).expect("Could not open Alsa softvol with that card");
             let mut element_id = ElemId::new(ElemIface::Mixer);
-            element_id.set_name(&CString::new(config.control.as_str()).unwrap());
+            element_id.set_name(&CString::new(config.control.as_str()).expect("Could not open Alsa softvol with that name"));
             element_id.set_index(config.index);
             control
                 .get_db_range(&element_id)
-                .expect("Could not get Alsa dB range")
+                .expect("Could not get Alsa softvol dB range")
         } else {
-            simple_element.get_playback_db_range()
+            let (mut min_millibel, max_millibel) = simple_element.get_playback_db_range();
+
+            // Some controls report that their minimum volume is mute, instead
+            // of their actual lowest dB setting before that.
+            if min_millibel == MilliBel(SND_CTL_TLV_DB_GAIN_MUTE) {
+                min_millibel = simple_element
+                    .ask_playback_vol_db(min)
+                    .expect("Could not convert Alsa raw volume to dB volume");
+//                min_millibel = MilliBel((single_highest - max_millibel).0 * range);
+            }
+            (min_millibel, max_millibel)
         };
-        let min_db = min_millibel.to_db() as i16;
-        let max_db = max_millibel.to_db() as i16;
-        let db_range = i16::abs(max_db - min_db) as u8;
+
+        let min_db = min_millibel.to_db();
+        let max_db = max_millibel.to_db();
+        let db_range = f32::abs(max_db - min_db);
 
         // Synchronize the volume control dB range with the mixer control,
         // unless it was already set with a command line option.
         if !config.volume_ctrl.range_ok() {
-            config.volume_ctrl.set_db_range(db_range);
+            config.volume_ctrl.set_db_range(db_range as u8);
         }
 
         // For hardware controls with a small range (24 dB or less),
         // force using the dB API with a linear mapping.
         let mut use_linear_in_db = false;
-        if !is_softvol && db_range <= 24 {
+        if !is_softvol && db_range <= 24.0 {
             use_linear_in_db = true;
             config.volume_ctrl = VolumeCtrl::Linear;
         }
@@ -87,7 +98,7 @@ impl Mixer for AlsaMixer {
         debug!("Alsa support for playback (mute) switch: {}", has_switch);
         debug!("Alsa raw volume range: [{}..{}] ({})", min, max, range);
         debug!(
-            "Alsa dB volume range: [{}..{}] ({})",
+            "Alsa dB volume range: [{:.2}..{:.2}] ({:.2})",
             min_db, max_db, db_range
         );
         debug!("Alsa forcing linear dB mapping: {}", use_linear_in_db);
@@ -132,13 +143,13 @@ impl Mixer for AlsaMixer {
             .to_db();
 
         if self.use_linear_in_db {
-            ((db_volume - self.min_db as f32) / self.db_range as f32) as u16
+            ((db_volume - self.min_db) / self.db_range) as u16
         } else if f32::abs(db_volume - MilliBel(SND_CTL_TLV_DB_GAIN_MUTE).to_db()) <= f32::EPSILON {
             0
         } else {
             self.config
                 .volume_ctrl
-                .unmap(db_to_ratio(db_volume - self.max_db as f32))
+                .unmap(db_to_ratio(db_volume - self.max_db))
         }
     }
 
@@ -151,10 +162,12 @@ impl Mixer for AlsaMixer {
 
         if self.has_switch {
             if volume == 0 {
+                debug!("Disabling playback (setting mute) on Alsa");
                 simple_element
                     .set_playback_switch_all(0)
                     .expect("Could not disable playback (set mute) on Alsa");
             } else if self.switched_off() {
+                debug!("Enabling playback (unsetting mute) on Alsa");
                 simple_element
                     .set_playback_switch_all(1)
                     .expect("Could not enable playback (unset mute) on Alsa");
@@ -173,15 +186,15 @@ impl Mixer for AlsaMixer {
         }
 
         let db_volume = if self.use_linear_in_db {
-            self.min_db as f32 + mapped_volume as f32 * self.db_range as f32
+            self.min_db + mapped_volume * self.db_range
         } else if volume == 0 {
             // prevent ratio_to_db(0.0) from returning -inf
             MilliBel(SND_CTL_TLV_DB_GAIN_MUTE).to_db()
         } else {
-            ratio_to_db(mapped_volume) + self.max_db as f32
+            ratio_to_db(mapped_volume) + self.max_db
         };
 
-        debug!("Setting Alsa dB volume to {}", db_volume);
+        debug!("Setting Alsa volume to {:.2} dB", db_volume);
         simple_element
             .set_playback_db_all(MilliBel::from_db(db_volume), Round::Floor)
             .expect("Could not set Alsa dB volume");
