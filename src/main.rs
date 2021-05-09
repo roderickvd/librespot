@@ -256,7 +256,7 @@ fn get_setup(args: &[String]) -> Setup {
         .optopt(
             "",
             "mixer-card",
-            "Alsa mixer card, e.g 'hw:0' or similar from `aplay -l`. Defaults to 'default'.",
+            "Alsa mixer card, e.g 'hw:0' or similar from `aplay -l`. Defaults to the device name if specified, 'default' otherwise.",
             "CARD",
         )
         .optopt(
@@ -404,9 +404,13 @@ fn get_setup(args: &[String]) -> Setup {
     let mixer = mixer::find(mixer_name.as_ref()).expect("Invalid mixer");
 
     let mixer_config = {
-        let card = matches
-            .opt_str("mixer-card")
-            .unwrap_or_else(|| String::from("default"));
+        let card = matches.opt_str("mixer-card").unwrap_or_else(|| {
+            if let Some(ref device_name) = device {
+                device_name.to_string()
+            } else {
+                String::from("default")
+            }
+        });
         let index = matches
             .opt_str("mixer-index")
             .map(|index| index.parse::<u32>().unwrap())
