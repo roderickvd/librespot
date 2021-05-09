@@ -103,7 +103,7 @@ impl Mixer for AlsaMixer {
         // Synchronize the volume control dB range with the mixer control,
         // unless it was already set with a command line option.
         if !config.volume_ctrl.range_ok() {
-            config.volume_ctrl.set_db_range(db_range as u8);
+            config.volume_ctrl.set_db_range(db_range);
         }
 
         // For hardware controls with a small range (24 dB or less),

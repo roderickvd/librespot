@@ -413,13 +413,18 @@ fn get_setup(args: &[String]) -> Setup {
         let control = matches
             .opt_str("mixer-name")
             .unwrap_or_else(|| String::from("PCM"));
-        let volume_range = matches
+        let mut volume_range = matches
             .opt_str("volume-range")
-            .map(|range| range.parse::<u8>().unwrap())
+            .map(|range| range.parse::<f32>().unwrap())
             .unwrap_or_else(|| match mixer_name.as_ref().map(AsRef::as_ref) {
-                Some("alsa") => 0, // let Alsa query the control
+                Some("alsa") => 0.0, // let Alsa query the control
                 _ => VolumeCtrl::DEFAULT_DB_RANGE,
             });
+        if volume_range < 0.0 {
+            // User might have specified range as minimum dB volume.
+            volume_range *= -1.0;
+            warn!("Please enter positive volume ranges only, assuming {:.2} dB", volume_range);
+        }
         let volume_ctrl = matches
             .opt_str("volume-ctrl")
             .as_ref()

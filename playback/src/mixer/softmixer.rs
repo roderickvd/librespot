@@ -51,7 +51,7 @@ struct SoftVolumeApplier {
 impl AudioFilter for SoftVolumeApplier {
     fn modify_stream(&self, data: &mut [f32]) {
         let volume = f32::from_bits(self.volume.load(Ordering::Relaxed));
-        if f32::abs(volume - 1.0) > f32::EPSILON {
+        if volume < 1.0 {
             for x in data.iter_mut() {
                 *x = (*x as f64 * volume as f64) as f32;
             }

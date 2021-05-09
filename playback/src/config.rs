@@ -151,10 +151,10 @@ impl Default for PlayerConfig {
 // fields are intended for volume control range in dB
 #[derive(Clone, Copy, Debug)]
 pub enum VolumeCtrl {
-    Cubic(u8),
+    Cubic(f32),
     Fixed,
     Linear,
-    Log(u8),
+    Log(f32),
 }
 
 impl FromStr for VolumeCtrl {
@@ -172,9 +172,11 @@ impl Default for VolumeCtrl {
 
 impl VolumeCtrl {
     pub const MAX_VOLUME: u16 = std::u16::MAX;
-    pub const DEFAULT_DB_RANGE: u8 = 60;
 
-    pub fn from_str_with_range(s: &str, db_range: u8) -> Result<Self, <Self as FromStr>::Err> {
+    // Taken from: https://www.dr-lex.be/info-stuff/volumecontrols.html
+    pub const DEFAULT_DB_RANGE: f32 = 60.0;
+
+    pub fn from_str_with_range(s: &str, db_range: f32) -> Result<Self, <Self as FromStr>::Err> {
         use self::VolumeCtrl::*;
         match s.to_lowercase().as_ref() {
             "cubic" => Ok(Cubic(db_range)),
