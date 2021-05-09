@@ -26,6 +26,7 @@ pub struct AlsaMixer {
 // min_db cannot be depended on to be mute. Also note that contrary to
 // its name copied verbatim from Alsa, this is in millibel scale.
 const SND_CTL_TLV_DB_GAIN_MUTE: i64 = -9999999;
+const DEFAULT_MAX_DB: MilliBel = MilliBel(0);
 
 impl Mixer for AlsaMixer {
     fn open(config: MixerConfig) -> Self {
@@ -63,9 +64,24 @@ impl Mixer for AlsaMixer {
                     .expect("Could not open Alsa softvol with that name"),
             );
             element_id.set_index(config.index);
-            control
+            let (min_millibel, mut max_millibel) = control
                 .get_db_range(&element_id)
-                .expect("Could not get Alsa softvol dB range")
+                .expect("Could not get Alsa softvol dB range");
+
+            // Alsa can report incorrect maximum volumes due to rounding
+            // errors. e.g. Alsa rounds [-60.0..0.0] in range [0..255] to
+            // step size 0.23. Then multiplying 0.23 by 255 incorrectly
+            // returns a dB range of 58.65 instead of 60 dB, from
+            // [-60.00..-1.35]. This workaround checks the default case
+            // where the maximum dB volume is expected to be 0.
+            if max_millibel != DEFAULT_MAX_DB {
+                let reported_step_size = (max_millibel - min_millibel).0 / range;
+                let assumed_step_size = (DEFAULT_MAX_DB - min_millibel).0 / range;
+                if reported_step_size == assumed_step_size {
+                    max_millibel = DEFAULT_MAX_DB;
+                }
+            }
+            (min_millibel, max_millibel)
         } else {
             let (mut min_millibel, max_millibel) = simple_element.get_playback_db_range();
 
