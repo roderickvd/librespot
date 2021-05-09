@@ -1,6 +1,6 @@
 use crate::config::VolumeCtrl;
 
-mod mappings;
+pub mod mappings;
 use self::mappings::MappedCtrl;
 
 pub trait Mixer: Send {

@@ -16,6 +16,7 @@ use librespot::playback::audio_backend::{self, SinkBuilder, BACKENDS};
 use librespot::playback::config::{
     AudioFormat, Bitrate, NormalisationMethod, NormalisationType, PlayerConfig, VolumeCtrl,
 };
+use librespot::playback::mixer::mappings::MappedCtrl;
 use librespot::playback::mixer::{self, MixerConfig, MixerFn};
 use librespot::playback::player::{db_to_ratio, Player};
 
@@ -423,7 +424,10 @@ fn get_setup(args: &[String]) -> Setup {
         if volume_range < 0.0 {
             // User might have specified range as minimum dB volume.
             volume_range *= -1.0;
-            warn!("Please enter positive volume ranges only, assuming {:.2} dB", volume_range);
+            warn!(
+                "Please enter positive volume ranges only, assuming {:.2} dB",
+                volume_range
+            );
         }
         let volume_ctrl = matches
             .opt_str("volume-ctrl")
@@ -432,7 +436,11 @@ fn get_setup(args: &[String]) -> Setup {
                 VolumeCtrl::from_str_with_range(volume_ctrl, volume_range)
                     .expect("Invalid volume control type")
             })
-            .unwrap_or_default();
+            .unwrap_or_else(|| {
+                let mut volume_ctrl = VolumeCtrl::default();
+                volume_ctrl.set_db_range(volume_range);
+                volume_ctrl
+            });
 
         MixerConfig {
             card,
