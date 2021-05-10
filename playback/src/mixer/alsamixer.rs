@@ -25,8 +25,8 @@ pub struct AlsaMixer {
 
 // min_db cannot be depended on to be mute. Also note that contrary to
 // its name copied verbatim from Alsa, this is in millibel scale.
-const SND_CTL_TLV_DB_GAIN_MUTE: i64 = -9999999;
-const DEFAULT_MAX_DB: MilliBel = MilliBel(0);
+const SND_CTL_TLV_DB_GAIN_MUTE: MilliBel = MilliBel(-9999999);
+const ZERO_DB: MilliBel = MilliBel(0);
 
 impl Mixer for AlsaMixer {
     fn open(config: MixerConfig) -> Self {
@@ -73,12 +73,17 @@ impl Mixer for AlsaMixer {
             // step size 0.23. Then multiplying 0.23 by 255 incorrectly
             // returns a dB range of 58.65 instead of 60 dB, from
             // [-60.00..-1.35]. This workaround checks the default case
-            // where the maximum dB volume is expected to be 0.
-            if max_millibel != DEFAULT_MAX_DB {
+            // where the maximum dB volume is expected to be 0, and cannot
+            // cover all cases.
+            if max_millibel != ZERO_DB {
+                warn!("Alsa mixer reported maximum dB != 0, which is suspect");
                 let reported_step_size = (max_millibel - min_millibel).0 / range;
-                let assumed_step_size = (DEFAULT_MAX_DB - min_millibel).0 / range;
+                let assumed_step_size = (ZERO_DB - min_millibel).0 / range;
                 if reported_step_size == assumed_step_size {
-                    max_millibel = DEFAULT_MAX_DB;
+                    warn!("Alsa rounding error detected, setting maximum dB to {:.2} instead of {:.2}", ZERO_DB.to_db(), max_millibel.to_db());
+                    max_millibel = ZERO_DB;
+                } else {
+                    warn!("Please manually set with `--volume-ctrl` if this is incorrect");
                 }
             }
             (min_millibel, max_millibel)
@@ -87,7 +92,7 @@ impl Mixer for AlsaMixer {
 
             // Some controls report that their minimum volume is mute, instead
             // of their actual lowest dB setting before that.
-            if min_millibel == MilliBel(SND_CTL_TLV_DB_GAIN_MUTE) && min < max {
+            if min_millibel == SND_CTL_TLV_DB_GAIN_MUTE && min < max {
                 debug!("Alsa mixer reported minimum dB as mute, trying workaround");
                 min_millibel = simple_element
                     .ask_playback_vol_db(min + 1)
@@ -164,7 +169,7 @@ impl Mixer for AlsaMixer {
 
         if self.use_linear_in_db {
             ((db_volume - self.min_db) / self.db_range) as u16
-        } else if f32::abs(db_volume - MilliBel(SND_CTL_TLV_DB_GAIN_MUTE).to_db()) <= f32::EPSILON {
+        } else if f32::abs(db_volume - SND_CTL_TLV_DB_GAIN_MUTE.to_db()) <= f32::EPSILON {
             0
         } else {
             self.config
@@ -209,7 +214,7 @@ impl Mixer for AlsaMixer {
             self.min_db + mapped_volume * self.db_range
         } else if volume == 0 {
             // prevent ratio_to_db(0.0) from returning -inf
-            MilliBel(SND_CTL_TLV_DB_GAIN_MUTE).to_db()
+            SND_CTL_TLV_DB_GAIN_MUTE.to_db()
         } else {
             ratio_to_db(mapped_volume) + self.max_db
         };
