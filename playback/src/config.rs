@@ -118,6 +118,7 @@ impl Default for NormalisationMethod {
 #[derive(Clone, Debug)]
 pub struct PlayerConfig {
     pub bitrate: Bitrate,
+    pub gapless: bool,
     pub normalisation: bool,
     pub normalisation_type: NormalisationType,
     pub normalisation_method: NormalisationMethod,
@@ -126,7 +127,6 @@ pub struct PlayerConfig {
     pub normalisation_attack: f32,
     pub normalisation_release: f32,
     pub normalisation_knee: f32,
-    pub gapless: bool,
     pub passthrough: bool,
 }
 
@@ -134,6 +134,7 @@ impl Default for PlayerConfig {
     fn default() -> PlayerConfig {
         PlayerConfig {
             bitrate: Bitrate::default(),
+            gapless: true,
             normalisation: false,
             normalisation_type: NormalisationType::default(),
             normalisation_method: NormalisationMethod::default(),
@@ -142,7 +143,6 @@ impl Default for PlayerConfig {
             normalisation_attack: 0.005,
             normalisation_release: 0.1,
             normalisation_knee: 1.0,
-            gapless: true,
             passthrough: false,
         }
     }
