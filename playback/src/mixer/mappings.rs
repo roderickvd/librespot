@@ -54,7 +54,7 @@ impl MappedCtrl for VolumeCtrl {
         if f32::abs(mapped_volume - 0.0) <= f32::EPSILON {
             return 0;
         } else if f32::abs(mapped_volume - 1.0) <= f32::EPSILON {
-            return 1;
+            return Self::MAX_VOLUME;
         }
 
         let unmapped_volume = if self.range_ok() {
