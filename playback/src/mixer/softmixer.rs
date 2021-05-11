@@ -21,7 +21,7 @@ impl Mixer for SoftMixer {
         );
 
         Self {
-            volume: Arc::new(AtomicU32::new(f32::to_bits(0.0))),
+            volume: Arc::new(AtomicU32::new(f32::to_bits(0.5))),
             volume_ctrl: config.volume_ctrl,
         }
     }

@@ -268,7 +268,7 @@ fn get_setup(args: &[String]) -> Setup {
         .optopt(
             "",
             "initial-volume",
-            "Initial volume in %, once connected {0..100}. Defaults to 50.",
+            "Initial volume in %, once connected {0..100}. Defaults to 50 for softvol and for alsa the current volume.",
             "VOLUME",
         )
         .optopt(
@@ -508,7 +508,10 @@ fn get_setup(args: &[String]) -> Setup {
             }
             (volume as f32 / 100.0 * VolumeCtrl::MAX_VOLUME as f32) as u16
         })
-        .or_else(|| cache.as_ref().and_then(Cache::volume))
+        .or_else(|| match mixer_name.as_ref().map(AsRef::as_ref) {
+            Some("alsa") => Some((mixer)(mixer_config.clone()).volume()),
+            _ => cache.as_ref().and_then(Cache::volume),
+        })
         .unwrap_or(VolumeCtrl::MAX_VOLUME / 2);
 
     let zeroconf_port = matches
