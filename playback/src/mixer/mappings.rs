@@ -97,7 +97,7 @@ impl MappedCtrl for VolumeCtrl {
     }
 }
 
-trait VolumeMapping {
+pub trait VolumeMapping {
     fn map(unmapped_volume: f32, db_range: f32) -> f32;
     fn unmap(mapped_volume: f32, db_range: f32) -> f32;
 }
@@ -106,7 +106,7 @@ trait VolumeMapping {
 //
 // As the human auditory system has a logarithmic sensitivity curve, this
 // mapping results in a near linear loudness experience with the listener.
-struct LogMapping {}
+pub struct LogMapping {}
 impl VolumeMapping for LogMapping {
     fn map(normalized_volume: f32, db_range: f32) -> f32 {
         let (db_ratio, ideal_factor) = Self::coefficients(db_range);
@@ -139,7 +139,7 @@ impl LogMapping {
 // better approximations to the logarithmic curve but because we only intend
 // to mimic Alsa here, we do not implement them. If your desire is to use a
 // logarithmic mapping, then use that volume control.
-struct CubicMapping {}
+pub struct CubicMapping {}
 impl VolumeMapping for CubicMapping {
     fn map(normalized_volume: f32, db_range: f32) -> f32 {
         let min_norm = Self::min_norm(db_range);

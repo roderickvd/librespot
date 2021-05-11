@@ -1,7 +1,7 @@
 use crate::player::{db_to_ratio, ratio_to_db};
 
-use super::{MappedCtrl, VolumeCtrl};
-use super::{Mixer, MixerConfig};
+use super::mappings::{LogMapping, MappedCtrl, VolumeMapping};
+use super::{Mixer, MixerConfig, VolumeCtrl};
 
 use alsa::ctl::{ElemId, ElemIface};
 use alsa::mixer::{MilliBel, SelemChannelId, SelemId};
@@ -153,29 +153,33 @@ impl Mixer for AlsaMixer {
             return 0;
         }
 
-        if self.use_raw_linear() {
-            let alsa_volume = simple_element
+        let mut mapped_volume = if self.is_softvol {
+            let raw_volume = simple_element
                 .get_playback_volume(SelemChannelId::mono())
-                .expect("Could not get current Alsa volume");
+                .expect("Could not get raw Alsa volume");
 
-            let mapped_volume = alsa_volume as f32 / self.range as f32 - self.min as f32;
-            return self.config.volume_ctrl.unmap(mapped_volume);
-        }
-
-        let db_volume = simple_element
-            .get_playback_vol_db(SelemChannelId::mono())
-            .unwrap_or(MilliBel(0))
-            .to_db();
-
-        if self.use_linear_in_db {
-            ((db_volume - self.min_db) / self.db_range) as u16
-        } else if f32::abs(db_volume - SND_CTL_TLV_DB_GAIN_MUTE.to_db()) <= f32::EPSILON {
-            0
+            raw_volume as f32 / self.range as f32 - self.min as f32
         } else {
-            self.config
-                .volume_ctrl
-                .unmap(db_to_ratio(db_volume - self.max_db))
+            let db_volume = simple_element
+                .get_playback_vol_db(SelemChannelId::mono())
+                .expect("Could not get Alsa dB volume")
+                .to_db();
+
+            if self.use_linear_in_db {
+                (db_volume - self.min_db) / self.db_range
+            } else if f32::abs(db_volume - SND_CTL_TLV_DB_GAIN_MUTE.to_db()) <= f32::EPSILON {
+                0.0
+            } else {
+                db_to_ratio(db_volume - self.max_db)
+            }
+        };
+
+        // see comment in `set_volume` why we are handling an antilog volume
+        if mapped_volume > 0.0 && self.is_some_linear() {
+            mapped_volume = LogMapping::map(mapped_volume, self.db_range);
         }
+
+        self.config.volume_ctrl.unmap(mapped_volume)
     }
 
     fn set_volume(&self, volume: u16) {
@@ -199,9 +203,19 @@ impl Mixer for AlsaMixer {
             }
         }
 
-        let mapped_volume = self.config.volume_ctrl.map(volume);
+        let mut mapped_volume = self.config.volume_ctrl.map(volume);
 
-        if self.use_raw_linear() {
+        // Alsa's linear algorithms map everything onto log. Alsa softvol does
+        // this internally. In the case of `use_linear_in_db` this happens
+        // automatically by virtue of the dB scale. This means that linear
+        // controls become log, log becomes log-on-log, and so on. To make
+        // the controls work as expected, perform an antilog calculation to
+        // counteract what Alsa will be doing to the set volume.
+        if mapped_volume > 0.0 && self.is_some_linear() {
+            mapped_volume = LogMapping::unmap(mapped_volume, self.db_range);
+        }
+
+        if self.is_softvol {
             let scaled_volume = (self.min as f32 + mapped_volume * self.range as f32) as i64;
             debug!("Setting Alsa raw volume to {}", scaled_volume);
             simple_element
@@ -240,12 +254,11 @@ impl AlsaMixer {
 
         simple_element
             .get_playback_switch(SelemChannelId::mono())
-            .map(|b| b == 0)
+            .map(|playback| playback == 0)
             .unwrap_or(false)
     }
 
-    fn use_raw_linear(&self) -> bool {
-        self.is_softvol
-            || (!self.use_linear_in_db && matches!(self.config.volume_ctrl, VolumeCtrl::Linear))
+    fn is_some_linear(&self) -> bool {
+        self.is_softvol || self.use_linear_in_db
     }
 }
