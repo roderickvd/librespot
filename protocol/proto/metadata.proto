@@ -172,15 +172,9 @@ message AudioFile {
         MP3_160 = 0x5;
         MP3_96 = 0x6;
         MP3_160_ENC = 0x7;
-        // v4 
-        // AAC_24 = 0x8;
-        // AAC_48 = 0x9;
-        MP4_128_DUAL = 0x8;
-        OTHER3 = 0x9;
-        AAC_160 = 0xa;
-        AAC_320 = 0xb;
-        MP4_128 = 0xc;
-        OTHER5 = 0xd;
+        AAC_24 = 0x8;
+        AAC_48 = 0x9;
+        AAC_24_NORM = 0x10;
     }
 }
 

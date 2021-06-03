@@ -254,7 +254,7 @@ fn get_setup(args: &[String]) -> Setup {
     .optopt(
         BITRATE,
         "bitrate",
-        "Bitrate (kbps) {96|160|320}. Defaults to 160.",
+        "Bitrate (kbps) {24|96|160|320}. Defaults to 160.",
         "BITRATE",
     )
     .optopt(

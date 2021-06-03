@@ -8,6 +8,7 @@ use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum Bitrate {
+    Bitrate24,
     Bitrate96,
     Bitrate160,
     Bitrate320,
@@ -17,6 +18,7 @@ impl FromStr for Bitrate {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "24" => Ok(Self::Bitrate24),
             "96" => Ok(Self::Bitrate96),
             "160" => Ok(Self::Bitrate160),
             "320" => Ok(Self::Bitrate320),
