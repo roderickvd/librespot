@@ -12,6 +12,9 @@ pub enum Bitrate {
     Bitrate96,
     Bitrate160,
     Bitrate320,
+
+    #[cfg(feature = "hifi")]
+    BitrateFLAC,
 }
 
 impl FromStr for Bitrate {
@@ -22,6 +25,10 @@ impl FromStr for Bitrate {
             "96" => Ok(Self::Bitrate96),
             "160" => Ok(Self::Bitrate160),
             "320" => Ok(Self::Bitrate320),
+
+            #[cfg(feature = "hifi")]
+            "hifi" => Ok(Self::BitrateFLAC),
+
             _ => Err(()),
         }
     }

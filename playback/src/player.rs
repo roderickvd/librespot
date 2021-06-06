@@ -654,17 +654,19 @@ impl PlayerTrackLoader {
 
     fn stream_data_rate(&self, format: FileFormat) -> usize {
         match format {
+            FileFormat::AAC_24 => 3 * 1024,
+            FileFormat::AAC_48 => 6 * 1024,
+            #[cfg(feature = "hifi")]
+            FileFormat::FLAC_FLAC => 112 * 1024, // assume 900 kbps on average
+            FileFormat::MP3_96 => 12 * 1024,
+            FileFormat::MP3_160 => 20 * 1024,
+            // TODO: decrypt MP3_160_ENC: https://github.com/TooTallNate/node-spotify-web/pull/120/files
+            FileFormat::MP3_160_ENC => 20 * 1024,
+            FileFormat::MP3_256 => 32 * 1024,
+            FileFormat::MP3_320 => 40 * 1024,
             FileFormat::OGG_VORBIS_96 => 12 * 1024,
             FileFormat::OGG_VORBIS_160 => 20 * 1024,
             FileFormat::OGG_VORBIS_320 => 40 * 1024,
-            FileFormat::MP3_256 => 32 * 1024,
-            FileFormat::MP3_320 => 40 * 1024,
-            FileFormat::MP3_160 => 20 * 1024,
-            FileFormat::MP3_96 => 12 * 1024,
-            FileFormat::MP3_160_ENC => 20 * 1024,
-            FileFormat::AAC_24 => 3 * 1024,
-            FileFormat::AAC_48 => 6 * 1024,
-            FileFormat::AAC_24_NORM => 3 * 1024,
         }
     }
 
@@ -694,23 +696,79 @@ impl PlayerTrackLoader {
         assert!(audio.duration >= 0);
         let duration_ms = audio.duration as u32;
 
-        // (Most) podcasts seem to support only 96 bit Vorbis, so fall back to it
+        // (Most) podcasts seem to support low bitrates, so fall back to them
         let formats = match self.config.bitrate {
-            Bitrate::Bitrate24 |
+            Bitrate::Bitrate24 => [
+                FileFormat::AAC_24,
+                FileFormat::AAC_48,
+                FileFormat::OGG_VORBIS_96,
+                FileFormat::MP3_96,
+                FileFormat::OGG_VORBIS_160,
+                FileFormat::MP3_160,
+                FileFormat::MP3_256,
+                FileFormat::OGG_VORBIS_320,
+                FileFormat::MP3_320,
+                #[cfg(feature = "hifi")]
+                FileFormat::FLAC_FLAC,
+            ],
             Bitrate::Bitrate96 => [
                 FileFormat::OGG_VORBIS_96,
+                FileFormat::MP3_96,
+                FileFormat::AAC_48,
+                FileFormat::AAC_24,
                 FileFormat::OGG_VORBIS_160,
+                FileFormat::MP3_160,
+                FileFormat::MP3_256,
                 FileFormat::OGG_VORBIS_320,
+                FileFormat::MP3_320,
+                #[cfg(feature = "hifi")]
+                FileFormat::FLAC_FLAC,
             ],
             Bitrate::Bitrate160 => [
+                // FileFormat::OGG_VORBIS_160,
+                // FileFormat::OGG_VORBIS_96,
+                // FileFormat::OGG_VORBIS_320,
                 FileFormat::OGG_VORBIS_160,
+                FileFormat::MP3_160,
                 FileFormat::OGG_VORBIS_96,
+                FileFormat::MP3_96,
+                FileFormat::AAC_48,
+                FileFormat::AAC_24,
+                FileFormat::MP3_256,
                 FileFormat::OGG_VORBIS_320,
+                FileFormat::MP3_320,
+                #[cfg(feature = "hifi")]
+                FileFormat::FLAC_FLAC,
             ],
             Bitrate::Bitrate320 => [
+                // FileFormat::OGG_VORBIS_320,
+                // FileFormat::OGG_VORBIS_160,
+                // FileFormat::OGG_VORBIS_96,
                 FileFormat::OGG_VORBIS_320,
+                FileFormat::MP3_320,
+                FileFormat::MP3_256,
                 FileFormat::OGG_VORBIS_160,
+                FileFormat::MP3_160,
                 FileFormat::OGG_VORBIS_96,
+                FileFormat::MP3_96,
+                FileFormat::AAC_48,
+                FileFormat::AAC_24,
+                #[cfg(feature = "hifi")]
+                FileFormat::FLAC_FLAC,
+            ],
+
+            #[cfg(feature = "hifi")]
+            Bitrate::BitrateFLAC => [
+                FileFormat::FLAC_FLAC,
+                FileFormat::OGG_VORBIS_320,
+                FileFormat::MP3_320,
+                FileFormat::MP3_256,
+                FileFormat::OGG_VORBIS_160,
+                FileFormat::MP3_160,
+                FileFormat::OGG_VORBIS_96,
+                FileFormat::MP3_96,
+                FileFormat::AAC_48,
+                FileFormat::AAC_24,
             ],
         };
 

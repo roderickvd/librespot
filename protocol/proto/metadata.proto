@@ -174,7 +174,7 @@ message AudioFile {
         MP3_160_ENC = 0x7;
         AAC_24 = 0x8;
         AAC_48 = 0x9;
-        AAC_24_NORM = 0x10;
+        FLAC_FLAC = 0x10;
     }
 }
 

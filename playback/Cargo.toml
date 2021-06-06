@@ -42,9 +42,13 @@ rodio           = { version = "0.14", optional = true, default-features = false 
 cpal            = { version = "0.13", optional = true }
 thiserror       = { version = "1", optional = true }
 
-# Decoder
+# Ogg Vorbis decoder
 lewton = "0.10"
 ogg = "0.8"
+
+# AAC, MP3 and FLAC decoder
+symphonia = { version = "0.2", default-features = false, features = [ "aac", "mp3"] }
+symphonia-bundle-flac = { version = "0.2", optional = true }
 
 # Dithering
 rand = "0.8"
@@ -59,3 +63,5 @@ rodio-backend = ["rodio", "cpal", "thiserror"]
 rodiojack-backend = ["rodio", "cpal/jack", "thiserror"]
 sdl-backend = ["sdl2"]
 gstreamer-backend = ["gstreamer", "gstreamer-app", "glib"]
+
+hifi = ["symphonia-bundle-flac"]

@@ -228,6 +228,11 @@ fn get_setup(args: &[String]) -> Setup {
     const VOLUME_RANGE: &str = "volume-range";
     const ZEROCONF_PORT: &str = "zeroconf-port";
 
+    #[cfg(not(feature = "hifi"))]
+    const BITRATE_OPTIONS: &str = "Bitrate (kbps) {24|96|160|320}. Defaults to 160.";
+    #[cfg(feature = "hifi")]
+    const BITRATE_OPTIONS: &str = "Bitrate (kbps) {24|96|160|320|hifi}. Defaults to 160.";
+
     let mut opts = getopts::Options::new();
     opts.optflag(
         HELP,
@@ -254,7 +259,7 @@ fn get_setup(args: &[String]) -> Setup {
     .optopt(
         BITRATE,
         "bitrate",
-        "Bitrate (kbps) {24|96|160|320}. Defaults to 160.",
+        BITRATE_OPTIONS,
         "BITRATE",
     )
     .optopt(
