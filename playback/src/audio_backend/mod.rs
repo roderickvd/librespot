@@ -56,6 +56,10 @@ macro_rules! sink_as_bytes {
                         let samples_s16: &[i16] = &converter.f64_to_s16(samples);
                         self.write_bytes(samples_s16.as_bytes())
                     }
+                    AudioFormat::S8 => {
+                        let samples_s8: &[i8] = &converter.f64_to_s8(samples);
+                        self.write_bytes(samples_s8.as_bytes())
+                    }
                 },
                 AudioPacket::OggData(samples) => self.write_bytes(samples),
             }

@@ -22,6 +22,10 @@ pub enum PortAudioSink<'a> {
         Option<portaudio_rs::stream::Stream<'a, i16, i16>>,
         StreamParameters<i16>,
     ),
+    S8(
+        Option<portaudio_rs::stream::Stream<'a, i8, i8>>,
+        StreamParameters<i8>,
+    ),
 }
 
 fn output_devices() -> Box<dyn Iterator<Item = (DeviceIndex, DeviceInfo)>> {
@@ -88,6 +92,7 @@ impl<'a> Open for PortAudioSink<'a> {
             AudioFormat::F32 => open_sink!(Self::F32, f32),
             AudioFormat::S32 => open_sink!(Self::S32, i32),
             AudioFormat::S16 => open_sink!(Self::S16, i16),
+            AudioFormat::S8 => open_sink!(Self::S8, i8),
             _ => {
                 unimplemented!("PortAudio currently does not support {:?} output", format)
             }
@@ -120,6 +125,7 @@ impl<'a> Sink for PortAudioSink<'a> {
             Self::F32(stream, parameters) => start_sink!(ref mut stream, ref parameters),
             Self::S32(stream, parameters) => start_sink!(ref mut stream, ref parameters),
             Self::S16(stream, parameters) => start_sink!(ref mut stream, ref parameters),
+            Self::S8(stream, parameters) => start_sink!(ref mut stream, ref parameters),
         };
 
         Ok(())
@@ -136,6 +142,7 @@ impl<'a> Sink for PortAudioSink<'a> {
             Self::F32(stream, _) => stop_sink!(ref mut stream),
             Self::S32(stream, _) => stop_sink!(ref mut stream),
             Self::S16(stream, _) => stop_sink!(ref mut stream),
+            Self::S8(stream, _) => stop_sink!(ref mut stream),
         };
 
         Ok(())
@@ -161,6 +168,10 @@ impl<'a> Sink for PortAudioSink<'a> {
             Self::S16(stream, _parameters) => {
                 let samples_s16: &[i16] = &converter.f64_to_s16(samples);
                 write_sink!(ref mut stream, samples_s16)
+            }
+            Self::S8(stream, _parameters) => {
+                let samples_s8: &[i8] = &converter.f64_to_s8(samples);
+                write_sink!(ref mut stream, samples_s8)
             }
         };
         match result {

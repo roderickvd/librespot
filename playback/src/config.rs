@@ -39,6 +39,7 @@ pub enum AudioFormat {
     S24,
     S24_3,
     S16,
+    S8,
 }
 
 impl FromStr for AudioFormat {
@@ -51,6 +52,7 @@ impl FromStr for AudioFormat {
             "S24" => Ok(Self::S24),
             "S24_3" => Ok(Self::S24_3),
             "S16" => Ok(Self::S16),
+            "S8" => Ok(Self::S8),
             _ => Err(()),
         }
     }
@@ -71,6 +73,7 @@ impl AudioFormat {
             Self::F32 => mem::size_of::<f32>(),
             Self::S24_3 => mem::size_of::<i24>(),
             Self::S16 => mem::size_of::<i16>(),
+            Self::S8 => mem::size_of::<i8>(),
             _ => mem::size_of::<i32>(), // S32 and S24 are both stored in i32
         }
     }

@@ -94,6 +94,7 @@ fn open_device(dev_name: &str, format: AudioFormat) -> Result<(PCM, usize), Alsa
         AudioFormat::S32 => Format::s32(),
         AudioFormat::S24 => Format::s24(),
         AudioFormat::S16 => Format::s16(),
+        AudioFormat::S8 => Format::S8,
 
         #[cfg(target_endian = "little")]
         AudioFormat::S24_3 => Format::S243LE,

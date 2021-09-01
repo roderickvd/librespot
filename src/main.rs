@@ -287,13 +287,13 @@ fn get_setup(args: &[String]) -> Setup {
     .optopt(
         "",
         FORMAT,
-        "Output format {F64|F32|S32|S24|S24_3|S16}. Defaults to S16.",
+        "Output format {F64|F32|S32|S24|S24_3|S16|S8}. Defaults to S16.",
         "FORMAT",
     )
     .optopt(
         "",
         DITHER,
-        "Specify the dither algorithm to use - [none, gpdf, tpdf, tpdf_hp]. Defaults to 'tpdf' for formats S16, S24, S24_3 and 'none' for other formats.",
+        "Specify the dither algorithm to use - [none, gpdf, tpdf, tpdf_hp]. Defaults to 'tpdf' for formats S8, S16, S24, S24_3 and 'none' for other formats.",
         "DITHER",
     )
     .optopt("m", MIXER_TYPE, "Mixer to use {alsa|softvol}.", "MIXER")
@@ -741,7 +741,7 @@ fn get_setup(args: &[String]) -> Setup {
             }
             // nothing set on command line => use default
             None => match format {
-                AudioFormat::S16 | AudioFormat::S24 | AudioFormat::S24_3 => {
+                AudioFormat::S8 | AudioFormat::S16 | AudioFormat::S24 | AudioFormat::S24_3 => {
                     PlayerConfig::default().ditherer
                 }
                 _ => None,

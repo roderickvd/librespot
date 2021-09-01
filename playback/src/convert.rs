@@ -51,6 +51,11 @@ impl Converter {
     /// conversions transparent.
     const SCALE_S16: f64 = 32768.;
 
+    /// To convert PCM samples from floating point normalized as `-1.0..=1.0`
+    /// to 8-bit signed integer, multiply by 128 (0x80) and saturate at
+    /// the bounds of `i8`.
+    const SCALE_S8: f64 = 128.;
+
     pub fn scale(&mut self, sample: f64, factor: f64) -> f64 {
         let dither = match self.ditherer {
             Some(ref mut d) => d.noise(),
@@ -122,6 +127,13 @@ impl Converter {
         samples
             .iter()
             .map(|sample| self.scale(*sample, Self::SCALE_S16) as i16)
+            .collect()
+    }
+
+    pub fn f64_to_s8(&mut self, samples: &[f64]) -> Vec<i8> {
+        samples
+            .iter()
+            .map(|sample| self.scale(*sample, Self::SCALE_S8) as i8)
             .collect()
     }
 }
